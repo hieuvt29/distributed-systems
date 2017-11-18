@@ -214,48 +214,45 @@ public class ServiceThread extends Thread {
         boolean appendToFile = false;
         boolean rewriteFile = false;
         String des = null;
-        StringBuilder t = new StringBuilder();
-        ArrayList<String> parameters = cmd.getParameters();
-        for (int i = 1; i < parameters.size(); i++) {
-            if (parameters.get(i).equals(">")) {
+        ArrayList<String> ct = new ArrayList<>();
+        int numParams = cmd.getParameters().size();
+        for (int i = 1; i < numParams; i++) {
+            if (cmd.getParameter(i).equals(">")) {
                 rewriteFile = true;
-                des = parameters.get(i + 1);
+                des = cmd.getParameter(i + 1);
                 break;
             }
-            if (parameters.get(i).equals(">>")) {
+            if (cmd.getParameter(i).equals(">>")) {
                 appendToFile = true;
-                des = parameters.get(i + 1);
+                des = cmd.getParameter(i + 1);
                 break;
             } else {
-                t.append(parameters.get(i));
+                ct.add(cmd.getParameter(i));
             }
         }
-        String content = t.toString();
+        String content = String.join(" ", ct);
         if (content == "" || content == null) {
             send("");
-        } else {
-            if (des != null) {
-                des = validatePath(des);
-                if (des == null) {
-                    return;
-                } else {
-                    File desFile = new File(des);
-                    if (rewriteFile) {
-                        PrintWriter pw = new PrintWriter(new FileOutputStream(desFile, false), true);
-                        pw.write(content);
-                        pw.close();
-                        send("Created file!");
-                    } else if (appendToFile) {
-                        PrintWriter pw = new PrintWriter(new FileOutputStream(desFile, true), true);
-                        pw.write(content);
-                        pw.close();
-                        send("Appended to file!");
-                    }
-                }
+        } else if (des != null) {
+            des = validatePath(des);
+            if (des == null) {
+                return;
             } else {
-                send(content);
+                File desFile = new File(des);
+                if (rewriteFile) {
+                    PrintWriter pw = new PrintWriter(new FileOutputStream(desFile, false), true);
+                    pw.write(content);
+                    pw.close();
+                    send("Created file!");
+                } else if (appendToFile) {
+                    PrintWriter pw = new PrintWriter(new FileOutputStream(desFile, true), true);
+                    pw.write(content);
+                    pw.close();
+                    send("Appended to file!");
+                }
             }
-
+        } else {
+            send(content);
         }
     }
 
@@ -341,11 +338,10 @@ public class ServiceThread extends Thread {
             if (folder.equals(".")) {
                 continue;
             } else if (folder.equals("..")) {
+                processPath.remove(processPath.size() - 1);
                 if (processPath.size() == 0) {
                     send("Permission deinied!");
                     return null;
-                } else {
-                    processPath.remove(processPath.size() - 1);
                 }
             } else {
                 processPath.add(folder);
@@ -420,18 +416,18 @@ public class ServiceThread extends Thread {
 
     private void rm(Command cmd) throws IOException {
         String p1 = cmd.getParameter(1);
-        if (p1 == null){
+        if (p1 == null) {
             send("missing parameters");
         } else if (p1.equals(".") || p1.equals("..")) {
             send("refusing to remove '.' or '..' directory: skipping '" + p1 + "'");
             return;
         }
-        
+
         boolean rmdir = false;
         if (cmd.getParameters().indexOf("-r") != -1) {
             rmdir = true;
         }
-        
+
         String path = validatePath(p1);
         if (path != null) {
             File f = new File(path);

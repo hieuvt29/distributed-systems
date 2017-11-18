@@ -13,82 +13,41 @@ import java.util.logging.Logger;
 
 public class DSClient {
 
-    public static void main(String[] args) {
+    Socket socketOfClient = null;
+    BufferedWriter os = null;
+    BufferedReader is = null;
+    // Địa chỉ máy chủ.
+    String host = null;
+    int port = 0;
 
-        // Địa chỉ máy chủ.
-        final String serverHost = "localhost";
-
-        Socket socketOfClient = null;
-        BufferedWriter os = null;
-        BufferedReader is = null;
-
-        try {
-            // Gửi yêu cầu kết nối tới Server đang lắng nghe
-            // trên máy 'localhost' cổng 9999.
-            socketOfClient = new Socket(serverHost, 9999);
-
-            // Tạo luồng đầu ra tại client (Gửi dữ liệu tới server)
-            os = new BufferedWriter(new OutputStreamWriter(socketOfClient.getOutputStream()));
-
-            // Luồng đầu vào tại Client (Nhận dữ liệu từ server).
-            is = new BufferedReader(new InputStreamReader(socketOfClient.getInputStream()));
-
-        } catch (UnknownHostException e) {
-            System.err.println("Don't know about host " + serverHost);
-            return;
-        } catch (IOException e) {
-            System.err.println("Couldn't get I/O for the connection to " + serverHost);
-            return;
-        }
-
-        try {
-            while (true) {
-                // Đọc dữ liệu trả lời từ phía server
-                // Bằng cách đọc luồng đầu vào của Socket tại Client.
-                String responseLine;
-                responseLine = receive(is);
-
-                if (responseLine.contains("username") || responseLine.contains("password")) {
-                    System.out.print(responseLine);
-                } else {
-                    System.out.print(responseLine);
-                    System.out.print("$ ");
-                }
-
-                Scanner sc = new Scanner(System.in);
-                String usercmd = sc.nextLine();
-                if (responseLine.contains("exit")) {
-                    disconnect(is, os, socketOfClient, false);
-                    return;
-                }
-                send(os, usercmd);
-
-                if (usercmd.contains("exit")) {
-                    break;
-                }
-            }
-            disconnect(is, os, socketOfClient, true);
-
-        } catch (UnknownHostException e) {
-            System.err.println("Trying to connect to unknown host: " + e);
-        } catch (IOException e) {
-            System.err.println("IOException:  " + e);
-        }
+    public DSClient(String host, int port) throws IOException {
+        this.host = host;
+        this.port = port;
+        init();
     }
 
-    static void disconnect(BufferedReader is, BufferedWriter os, Socket socketOfClient, boolean send) throws IOException {
+    private void init() throws IOException {
+        this.socketOfClient = new Socket(host, port);
+        // Tạo luồng đầu ra tại client (Gửi dữ liệu tới server)
+        this.os = new BufferedWriter(new OutputStreamWriter(this.socketOfClient.getOutputStream()));
+
+        // Luồng đầu vào tại Client (Nhận dữ liệu từ server).
+        this.is = new BufferedReader(new InputStreamReader(this.socketOfClient.getInputStream()));
+    }
+
+    public void disconnect(boolean send) throws IOException {
         if (send) {
-            send(os, "exit");
+            send("exit");
         }
         os.close();
         is.close();
         socketOfClient.close();
     }
 
-    static String receive(BufferedReader clientReader) throws IOException {
+    public String receive() throws IOException {
         StringBuilder res = new StringBuilder();
         String buff;
-        while ((buff = clientReader.readLine()) != null) {
+        while ((buff = is.readLine()) != null) {
             if (buff.contains("EOF")) {
                 break;
             }
@@ -100,22 +59,53 @@ public class DSClient {
         return res.toString();
     }
 
-    static void send(BufferedWriter clientWriter, String text, boolean flush) throws IOException {
-        clientWriter.write(text);
-        clientWriter.newLine();
+    public void send(String text, boolean flush) throws IOException {
+        os.write(text);
+        os.newLine();
         if (flush) {
-            clientWriter.write("EOF");
-            clientWriter.newLine();
-            clientWriter.flush();
+            os.write("EOF");
+            os.newLine();
+            os.flush();
         }
     }
 
-    static void send(BufferedWriter clientWriter, String text) throws IOException {
-        clientWriter.write(text);
-        clientWriter.newLine();
-        clientWriter.write("EOF");
-        clientWriter.newLine();
-        clientWriter.flush();
+    public void send(String text) throws IOException {
+        os.write(text);
+        os.newLine();
+        os.write("EOF");
+        os.newLine();
+        os.flush();
     }
 
+    public static void main(String[] args) throws IOException {
+
+        DSClient client = new DSClient("localhost", 9999);
+
+        while (true) {
+            // Đọc dữ liệu trả lời từ phía server
+            // Bằng cách đọc luồng đầu vào của Socket tại Client.
+            String responseLine;
+            responseLine = client.receive();
+
+            if (responseLine.contains("username") || responseLine.contains("password")) {
+                System.out.print(responseLine);
+            } else {
+                System.out.print(responseLine);
+                System.out.print("$ ");
+            }
+
+            Scanner sc = new Scanner(System.in);
+            String usercmd = sc.nextLine();
+            if (responseLine.contains("exit")) {
+                client.disconnect(false);
+                return;
+            }
+            client.send(usercmd);
+
+            if (usercmd.contains("exit")) {
+                break;
+            }
+        }
+        client.disconnect(true);
+    }
 }
