@@ -72,9 +72,9 @@ public class DSServer {
                     // Đồng thời nhận được một đối tượng Socket tại server.
                     
                     System.out.println("Accept a client!\nNumber of clients: " + clientThreads.size());
-                    ServiceThread newClient = new ServiceThread(socketOfServer, System.currentTimeMillis());
-                    clientThreads.add(newClient);
-                    newClient.start();
+                    ServiceThread newClientThread = new ServiceThread(socketOfServer, System.currentTimeMillis());
+                    clientThreads.add(newClientThread);
+                    newClientThread.start();
                 } else {
                     System.out.println("Reached the limit number of clients!");
                     os = new BufferedWriter(new OutputStreamWriter(socketOfServer.getOutputStream()));

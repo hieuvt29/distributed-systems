@@ -103,6 +103,66 @@ public class ServiceThread extends Thread {
         System.out.println("Disconnected with client# " + this.clientId + " at " + socketOfServer);
     }
 
+    private String validatePath(String path) throws IOException {
+        /* cases:
+        /path: => root/path
+        path: => root/username/path
+        ./a: => root/username/a
+        ../: => root/a
+        a/../b: => root/username/b
+         */
+        // if no path is supplied, set path to current directory
+        if (path == null) {
+            return String.join("/", this.client.getCurrentPath());
+        }
+        // check if path is valid
+        Pattern pattern = Pattern.compile("^(/)?([^/\\0123456789]+(/)?)+$");
+        Matcher mc = pattern.matcher(path);
+        if (!mc.find()) {
+            send("Invalid path");
+            return null;
+        }
+        // append root folder to path to get absolute path
+        ArrayList<String> processPath = new ArrayList<>();
+        if (path.startsWith("/")) {
+            path.replaceFirst("root/", "/");
+        } else {
+            for (String s : this.client.getCurrentPath()) {
+                processPath.add(s);
+            }
+        }
+
+        // catch . or .. folder
+        String[] folders = path.split("/");
+        for (String folder : folders) {
+            if (folder.equals(".")) {
+                continue;
+            } else if (folder.equals("..")) {
+                processPath.remove(processPath.size() - 1);
+                if (processPath.size() == 0) {
+                    send("Permission deinied!");
+                    return null;
+                }
+            } else {
+                processPath.add(folder);
+            }
+        }
+        path = String.join("/", processPath);
+
+        // root user have right to modify every child folders
+        if (this.client.getUsername().equals("root")) {
+            return path;
+        }
+
+        // other users just can change their root folder
+        if (processPath.size() == 1 || (!processPath.get(0).equals(DSServer.rootPath) || !processPath.get(1).equals(this.client.getUsername()))) {
+            send("Permission deinied!");
+            return null;
+        } else {
+            return path;
+        }
+    }
+
     @Override
     public void run() {
 
@@ -301,66 +361,6 @@ public class ServiceThread extends Thread {
 
         }
 
-    }
-
-    private String validatePath(String path) throws IOException {
-        /* cases:
-        /path: => root/path
-        path: => root/username/path
-        ./a: => root/username/a
-        ../: => root/a
-        a/../b: => root/username/b
-         */
-        // if no path is supplied, set path to current directory
-        if (path == null) {
-            return String.join("/", this.client.getCurrentPath());
-        }
-        // check if path is valid
-        Pattern pattern = Pattern.compile("^(/)?([^/\\0123456789]+(/)?)+$");
-        Matcher mc = pattern.matcher(path);
-        if (!mc.find()) {
-            send("Invalid path");
-            return null;
-        }
-        // append root folder to path to get absolute path
-        ArrayList<String> processPath = new ArrayList<>();
-        if (path.startsWith("/")) {
-            path.replaceFirst("root/", "/");
-        } else {
-            for (String s : this.client.getCurrentPath()) {
-                processPath.add(s);
-            }
-        }
-
-        // catch . or .. folder
-        String[] folders = path.split("/");
-        for (String folder : folders) {
-            if (folder.equals(".")) {
-                continue;
-            } else if (folder.equals("..")) {
-                processPath.remove(processPath.size() - 1);
-                if (processPath.size() == 0) {
-                    send("Permission deinied!");
-                    return null;
-                }
-            } else {
-                processPath.add(folder);
-            }
-        }
-        path = String.join("/", processPath);
-
-        // root user have right to modify every child folders
-        if (this.client.getUsername().equals("root")) {
-            return path;
-        }
-
-        // other users just can change their root folder
-        if (processPath.size() == 1 || (!processPath.get(0).equals(DSServer.rootPath) || !processPath.get(1).equals(this.client.getUsername()))) {
-            send("Permission deinied!");
-            return null;
-        } else {
-            return path;
-        }
     }
 
     private void mkdir(Command cmd) throws IOException {
