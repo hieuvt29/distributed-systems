@@ -108,9 +108,9 @@ public class ServiceThread extends Thread {
             return String.join("/", this.client.getCurrentPath());
         }
         // check if path is valid
-        Pattern pattern = Pattern.compile("^(/)?([^/\\0123456789]+(/)?)+$");
-        Matcher mc = pattern.matcher(path);
-        if (!mc.find()) {
+        String pattern = "[a-zA-Z0-9-_\\.\\/\\\\]+";
+        boolean isMatched = Pattern.matches(pattern, path);
+        if (!isMatched) {
             send("Invalid path", true, true);
             return null;
         }
@@ -223,7 +223,6 @@ public class ServiceThread extends Thread {
             String usercmdstring = receive();
             System.out.println("user command: " + usercmdstring);
             Command usercmd = new Command(usercmdstring);
-            System.out.println("usercmd: " + usercmd.getCommandName());
             if (usercmd.getCommandName().equals("exit")) {
                 break;
             } else if (usercmd.getCommandName().equals("hello")) {

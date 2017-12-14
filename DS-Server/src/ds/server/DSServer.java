@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
+import static java.lang.Integer.parseInt;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -18,12 +19,13 @@ import java.util.HashMap;
 
 public class DSServer {
 
-    public static final int MAX_CLIENT_NUMBER = 1;
+    public static int MAX_CLIENT_NUMBER = 1;
     public static ArrayList<ServiceThread> clientThreads = new ArrayList<>();
     public static ArrayList<User> users = new ArrayList<>();
     public static ServerSocket listener = null;
     public static InetAddress hostAddress = null;
     public static String rootPath = "root";
+    public static int port = 9999;
 
     private static void init() throws FileNotFoundException, IOException {
         // load users
@@ -42,9 +44,26 @@ public class DSServer {
         } finally {
             br.close();
         }
-
+        
         // create root directory
         new File(rootPath).mkdir();
+        
+        BufferedReader serverInfo = new BufferedReader(new FileReader("src/server.info"));
+        try {
+            String line = serverInfo.readLine();
+            while (line != null) {
+                String attr = line.split(":")[0];
+                String value = line.split(":")[1];
+                if (attr.equals("port")) {
+                    port = parseInt(value);
+                } else if (attr.equals("clients")){
+                    MAX_CLIENT_NUMBER = parseInt(value);
+                }
+                line = serverInfo.readLine();
+            }
+        } finally {
+            serverInfo.close();
+        }
     }
 
     public static void saveUsers() throws IOException {
@@ -87,7 +106,7 @@ public class DSServer {
         // Chú ý bạn không thể chọn cổng nhỏ hơn 1023 nếu không là người dùng
         // đặc quyền (privileged users (root)).
         try {
-            listener = new ServerSocket(9999);
+            listener = new ServerSocket(port);
             hostAddress = listener.getInetAddress();
         } catch (IOException e) {
             System.out.println(e);
