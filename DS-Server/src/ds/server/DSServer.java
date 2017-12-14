@@ -24,7 +24,7 @@ public class DSServer {
     public static ServerSocket listener = null;
     public static InetAddress hostAddress = null;
     public static String rootPath = "root";
-    
+
     private static void init() throws FileNotFoundException, IOException {
         // load users
         BufferedReader br = new BufferedReader(new FileReader("src/users.dat"));
@@ -37,35 +37,41 @@ public class DSServer {
                 users.add(u);
                 line = br.readLine();
             }
+            User admin = new User("root", "admin");
+            users.add(admin);
         } finally {
             br.close();
         }
-        
+
         // create root directory
         new File(rootPath).mkdir();
     }
+
     public static void saveUsers() throws IOException {
         BufferedWriter wr = new BufferedWriter(new FileWriter("src/users.dat"));
-        for (User u: users) {
+        for (User u : users) {
             wr.write(u.getUsername() + ":" + u.getPassword() + "\n");
         }
         wr.close();
     }
+
     public static boolean checkUser(String username, String password) {
         System.out.println("Checking user");
         return users.stream().anyMatch((user) -> (user.getUsername().equals(username) && user.getPassword().equals(password)));
     }
+
     public static int checkUsername(String username) {
-        for(User u: users) {
-            if (u.getUsername().equals(username)){
+        for (User u : users) {
+            if (u.getUsername().equals(username)) {
                 return users.indexOf(u);
             }
         }
         return -1;
     }
-    public static User getUser(String username) { 
-        for(User u: users) {
-            if (u.getUsername().equals(username)){
+
+    public static User getUser(String username) {
+        for (User u : users) {
+            if (u.getUsername().equals(username)) {
                 return u;
             }
         }
@@ -73,7 +79,7 @@ public class DSServer {
     }
 
     public static void main(String args[]) throws IOException {
-        
+
         BufferedReader is;
         BufferedWriter os;
         init();
@@ -97,7 +103,7 @@ public class DSServer {
                 if (clientThreads.size() < MAX_CLIENT_NUMBER) {
                     // Chấp nhận một yêu cầu kết nối từ phía Client.
                     // Đồng thời nhận được một đối tượng Socket tại server.
-                    
+
                     System.out.println("Accept a client!\nNumber of clients: " + clientThreads.size());
                     ServiceThread newClientThread = new ServiceThread(socketOfServer, System.currentTimeMillis());
                     clientThreads.add(newClientThread);
