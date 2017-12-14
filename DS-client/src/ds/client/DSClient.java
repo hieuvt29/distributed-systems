@@ -19,6 +19,7 @@ public class DSClient {
     // Địa chỉ máy chủ.
     String host = null;
     int port = 0;
+    boolean isConnected = false;
 
     public DSClient(String host, int port) throws IOException {
         this.host = host;
@@ -33,6 +34,7 @@ public class DSClient {
 
         // Luồng đầu vào tại Client (Nhận dữ liệu từ server).
         this.is = new BufferedReader(new InputStreamReader(this.socketOfClient.getInputStream()));
+        isConnected = true;
     }
 
     public void disconnect(boolean send) throws IOException {
@@ -41,6 +43,7 @@ public class DSClient {
         }
         os.close();
         is.close();
+        isConnected = false;
         socketOfClient.close();
     }
 

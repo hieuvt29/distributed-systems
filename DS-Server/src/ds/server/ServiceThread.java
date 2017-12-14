@@ -49,10 +49,10 @@ public class ServiceThread extends Thread {
         System.out.println("New connection with client# " + this.clientId + " at " + socketOfServer);
     }
 
-    private void send(String text) throws IOException {
+    private void send(String text, boolean flush, boolean sendPath) throws IOException {
         clientWriter.write(text);
         clientWriter.newLine();
-        if (this.client != null) {
+        if (this.client != null && sendPath) {
             ArrayList<String> pseudoPath = new ArrayList<>(this.client.getCurrentPath());
             if (this.client.getUsername().equals("root")) {
                 pseudoPath.set(0, "");
@@ -64,14 +64,6 @@ public class ServiceThread extends Thread {
             }
             clientWriter.newLine();
         }
-        clientWriter.write("EOF");
-        clientWriter.newLine();
-        clientWriter.flush();
-    }
-
-    private void send(String text, boolean flush) throws IOException {
-        clientWriter.write(text);
-        clientWriter.newLine();
         if (flush) {
             clientWriter.write("EOF");
             clientWriter.newLine();
@@ -119,9 +111,10 @@ public class ServiceThread extends Thread {
         Pattern pattern = Pattern.compile("^(/)?([^/\\0123456789]+(/)?)+$");
         Matcher mc = pattern.matcher(path);
         if (!mc.find()) {
-            send("Invalid path");
+            send("Invalid path", true, true);
             return null;
         }
+
         // append root folder to path to get absolute path
         ArrayList<String> processPath = new ArrayList<>();
         if (path.startsWith("/")) {
@@ -131,7 +124,6 @@ public class ServiceThread extends Thread {
                 processPath.add(s);
             }
         }
-
         // catch . or .. folder
         String[] folders = path.split("/");
         for (String folder : folders) {
@@ -140,7 +132,7 @@ public class ServiceThread extends Thread {
             } else if (folder.equals("..")) {
                 processPath.remove(processPath.size() - 1);
                 if (processPath.size() == 0) {
-                    send("Permission deinied!");
+                    send("Permission denied!", true, true);
                     return null;
                 }
             } else {
@@ -156,7 +148,7 @@ public class ServiceThread extends Thread {
 
         // other users just can change their root folder
         if (processPath.size() == 1 || (!processPath.get(0).equals(DSServer.rootPath) || !processPath.get(1).equals(this.client.getUsername()))) {
-            send("Permission deinied!");
+            send("Permission denied!", true, true);
             return null;
         } else {
             return path;
@@ -172,18 +164,18 @@ public class ServiceThread extends Thread {
             clientWriter = new BufferedWriter(new OutputStreamWriter(socketOfServer.getOutputStream()));
 
             System.out.println("Thread is running...");
-            send("You are connecting to ssh server...", false);
-            send("Establish connection...", false);
+            send("You are connecting to ssh server...", false, false);
+            send("Establish connection...", false, false);
 
             boolean isLoggedIn = false;
             while (!isLoggedIn && isConnected) {
                 try {
                     if (login()) {
                         isLoggedIn = true;
-                        send("Connected, start your session!");
+                        send("Connected, start your session!", true, true);
                         processRequests();
                     } else {
-                        send("Incorrect username or password!\nLogin again? (y/n) ");
+                        send("Incorrect username or password!\nLogin again? (y/n) ", true, true);
                         String res = receive();
                         if (res.equals("y") || res.equals("Y")) {
                             isLoggedIn = false;
@@ -202,7 +194,7 @@ public class ServiceThread extends Thread {
             System.out.println(e);
             e.printStackTrace();
             try {
-                send("Something fail! exiting... ");
+                send("Something fail! exiting... ", true, true);
             } catch (IOException ex) {
                 Logger.getLogger(ServiceThread.class.getName()).log(Level.SEVERE, null, ex);
             }
@@ -212,10 +204,10 @@ public class ServiceThread extends Thread {
     }
 
     private boolean login() throws ClassNotFoundException, IOException {
-        send("username: ");
+        send("username: ", true, false);
         String username = receive();
         System.out.println("username: " + username + " ----");
-        send("password: ");
+        send("password: ", true, false);
         String password = receive();
         System.out.println("password: " + password + " ----");
         if (DSServer.checkUser(username, password)) {
@@ -229,16 +221,13 @@ public class ServiceThread extends Thread {
     private void processRequests() throws IOException {
         while (isConnected) {
             String usercmdstring = receive();
-            if (usercmdstring == "" || usercmdstring == null) {
-                send("");
-                return;
-            }
+            System.out.println("user command: " + usercmdstring);
             Command usercmd = new Command(usercmdstring);
             System.out.println("usercmd: " + usercmd.getCommandName());
             if (usercmd.getCommandName().equals("exit")) {
                 break;
             } else if (usercmd.getCommandName().equals("hello")) {
-                send("Hi, enjoy it!");
+                send("Hi, enjoy it!", true, true);
             } else if (usercmd.getCommandName().equals("time")) {
                 time();
             } else if (usercmd.getCommandName().equals("echo")) {
@@ -248,7 +237,7 @@ public class ServiceThread extends Thread {
             } else if (usercmd.getCommandName().equals("mkdir")) {
                 mkdir(usercmd);
             } else if (usercmd.getCommandName().equals("pwd")) {
-                send(String.join("/", this.client.getCurrentPath()));
+                send(String.join("/", this.client.getCurrentPath()), true, true);
             } else if (usercmd.getCommandName().equals("cd")) {
                 cd(usercmd);
             } else if (usercmd.getCommandName().equals("rm")) {
@@ -257,17 +246,80 @@ public class ServiceThread extends Thread {
                 mv(usercmd);
             } else if (usercmd.getCommandName().equals("cp")) {
                 cp(usercmd);
+            } else if (usercmd.getCommandName().equals("userctl")) {
+                userctl(usercmd);
             } else {
-                send("Function is not available right now!");
+                send("Function is not available right now!", true, true);
             }
         }
+    }
+
+    private void userctl(Command cmd) throws IOException {
+        System.out.println("username: " + this.client.getUsername());
+        if (!this.client.getUsername().equals("root")) {
+            send("Permission denied!", true, true);
+            return;
+        } else {
+            send("Confirm password: ", true, false);
+            String password = receive();
+            if (!DSServer.checkUser("root", password)) {
+                send("Wrong password!", true, true);
+                return;
+            }
+        }
+        boolean isCreate = false;
+        boolean isDelete = false;
+        if (cmd.getParameters().indexOf("--create") != -1 || cmd.getParameters().indexOf("-c") != -1) {
+            isCreate = true;
+        } else if (cmd.getParameters().indexOf("--delete") != -1 || cmd.getParameters().indexOf("-d") != -1) {
+            isDelete = true;
+        } else {
+            send("Not support parameters!", true, true);
+        }
+        if (isCreate) {
+            int userIndex = cmd.getParameters().indexOf("-u");
+            String username = cmd.getParameter(userIndex + 1);
+            int passwordIndex = cmd.getParameters().indexOf("-p");
+            String password = cmd.getParameter(passwordIndex + 1);
+            if (userIndex == -1 || passwordIndex == -1) {
+                send("Not support parameters!: -u <username> -p <password>", true, true);
+                return;
+            }
+            User newUser = new User(username, password);
+            if (DSServer.checkUser(username, password)) {
+                send("Username has been used!", true, true);
+                return;
+            } else {
+                DSServer.users.add(newUser);
+                send("Created User!", true, true);
+                DSServer.saveUsers();
+                return;
+            }
+        } else if (isDelete) {
+            int userIndex = cmd.getParameters().indexOf("-u");
+            if (userIndex == -1) {
+                send("Not support parameters!: add -u option for username", true, true);
+                return;
+            }
+            String username = cmd.getParameter(userIndex + 1);
+            userIndex = DSServer.checkUsername(username);
+            if (userIndex == -1) {
+                send("User is not exist", true, true);
+            } else {
+                DSServer.users.remove(userIndex);
+                send("Removed User!", true, true);
+                DSServer.saveUsers();
+            }
+
+        }
+        
     }
 
     private void time() throws IOException {
         Date now = new Date(System.currentTimeMillis());
         SimpleDateFormat format = new SimpleDateFormat("hh:mm:ss dd/MM/yyyy");
         String s = format.format(now.getTime());
-        send(s);
+        send(s, true, true);
     }
 
     private void echo(Command cmd) throws IOException {
@@ -292,7 +344,7 @@ public class ServiceThread extends Thread {
         }
         String content = String.join(" ", ct);
         if (content == "" || content == null) {
-            send("");
+            send("", true, true);
         } else if (des != null) {
             des = validatePath(des);
             if (des == null) {
@@ -303,16 +355,16 @@ public class ServiceThread extends Thread {
                     PrintWriter pw = new PrintWriter(new FileOutputStream(desFile, false), true);
                     pw.write(content);
                     pw.close();
-                    send("Created file!");
+                    send("Created file!", true, true);
                 } else if (appendToFile) {
                     PrintWriter pw = new PrintWriter(new FileOutputStream(desFile, true), true);
                     pw.write(content);
                     pw.close();
-                    send("Appended to file!");
+                    send("Appended to file!", true, true);
                 }
             }
         } else {
-            send(content);
+            send(content, true, true);
         }
     }
 
@@ -351,12 +403,12 @@ public class ServiceThread extends Thread {
                         result.append(String.format("%-4s %-10s %-20s %-10s\n", "f", getSize(i), sdf.format(i.lastModified()), i.getName()));
                     }
                 }
-                send(result.toString());
+                send(result.toString(), true, true);
             } else if (file.isFile()) {
                 result.append(String.format("%-4s %-10s %-20s %-10s\n", "f", getSize(file), sdf.format(file.lastModified()), file.getName()));
-                send(result.toString());
+                send(result.toString(), true, true);
             } else {
-                send("No such file or directory");
+                send("No such file or directory", true, true);
             }
 
         }
@@ -366,7 +418,7 @@ public class ServiceThread extends Thread {
     private void mkdir(Command cmd) throws IOException {
         String path = cmd.getParameter(1);
         boolean createMultipleDir = false;
-        if (cmd.getParameters().indexOf("-p") != -1) {
+        if (cmd.getParameters().indexOf("-p") != -1 || cmd.getParameters().indexOf("--multiple") != -1) {
             createMultipleDir = true;
         }
         boolean result = false;
@@ -375,22 +427,22 @@ public class ServiceThread extends Thread {
             if (createMultipleDir) {
                 result = new File(path).mkdirs();
                 if (result) {
-                    send("Folder created!");
+                    send("Folder created!", true, true);
                 } else {
-                    send("Cannot create directory ‘" + path + "’: Folder exists");
+                    send("Cannot create directory ‘" + path + "’: Folder exists", true, true);
                 }
             } else {
                 String[] fs = path.split("/");
                 String parentFolder = String.join("/", Arrays.copyOf(fs, fs.length - 1));
                 File f = new File(parentFolder);
                 if (!f.isDirectory()) {
-                    send("Cannot create directory ‘" + parentFolder + "’: No such file or directory");
+                    send("Cannot create directory ‘" + parentFolder + "’: No such file or directory", true, true);
                 } else {
                     result = new File(path).mkdirs();
                     if (result) {
-                        send("Folder created!");
+                        send("Folder created!", true, true);
                     } else {
-                        send("Cannot create directory ‘" + path + "’: Folder exists");
+                        send("Cannot create directory ‘" + path + "’: Folder exists", true, true);
                     }
                 }
             }
@@ -404,12 +456,12 @@ public class ServiceThread extends Thread {
         if (path != null) {
             File f = new File(path);
             if (f.isFile()) {
-                send(path + ": Not a directory");
+                send(path + ": Not a directory", true, true);
             } else if (!f.isDirectory()) {
-                send(path + ": No such file or directory");
+                send(path + ": No such file or directory", true, true);
             } else {
                 this.client.setCurrentPath(path);
-                send("");
+                send("", true, true);
             }
         }
     }
@@ -417,14 +469,14 @@ public class ServiceThread extends Thread {
     private void rm(Command cmd) throws IOException {
         String p1 = cmd.getParameter(1);
         if (p1 == null) {
-            send("missing parameters");
+            send("missing parameters", true, true);
         } else if (p1.equals(".") || p1.equals("..")) {
-            send("refusing to remove '.' or '..' directory: skipping '" + p1 + "'");
+            send("refusing to remove '.' or '..' directory: skipping '" + p1 + "'", true, true);
             return;
         }
 
         boolean rmdir = false;
-        if (cmd.getParameters().indexOf("-r") != -1) {
+        if (cmd.getParameters().indexOf("-r") != -1 || cmd.getParameters().indexOf("--recursive") != -1) {
             rmdir = true;
         }
 
@@ -432,19 +484,23 @@ public class ServiceThread extends Thread {
         if (path != null) {
             File f = new File(path);
             if (f.exists()) {
-                if (rmdir) {
-                    removeDir(f);
-                    send("Removed!");
-                } else {
+                if (f.isDirectory()) {
+                    if (rmdir) {
+                        removeDir(f);
+                        send("Removed!", true, true);
+                    } else {
+                        send("Cannot remove '" + path + "': Is a directory", true, true);
+                    }
+                } else if (f.isFile()) {
                     boolean result = f.delete();
                     if (result) {
-                        send("Removed!");
+                        send("Removed!", true, true);
                     } else {
-                        send("Cannot remove '" + path + "': Is a directory");
+                        send("Something failed!", true, true);
                     }
                 }
             } else {
-                send("Cannot remove '" + path + "': No such file or directory");
+                send("Cannot remove '" + path + "': No such file or directory", true, true);
             }
 
         }
@@ -464,7 +520,7 @@ public class ServiceThread extends Thread {
         String src = cmd.getParameter(1);
         String des = cmd.getParameter(2);
         boolean forceWrite = false;
-        if (cmd.getParameters().indexOf("-f") != -1) {
+        if (cmd.getParameters().indexOf("-f") != -1 || cmd.getParameters().indexOf("--force") != -1) {
             forceWrite = true;
         }
 
@@ -483,27 +539,27 @@ public class ServiceThread extends Thread {
                             if (forceWrite) {
                                 boolean result = srcFile.renameTo(desFile);
                                 if (result) {
-                                    send("Moved!");
+                                    send("Moved!", true, true);
                                 } else {
-                                    send("Cannot move: Something failed!");
+                                    send("Cannot move: Something failed!", true, true);
                                 }
                             } else {
-                                send("Cannot move '" + des + "': File exists");
+                                send("Cannot move '" + des + "': File exists", true, true);
                             }
                         } else {
                             boolean result = srcFile.renameTo(desFile);
                             if (result) {
-                                send("Moved!");
+                                send("Moved!", true, true);
                             } else {
-                                send("Cannot move: Something failed!");
+                                send("Cannot move: Something failed!", true, true);
                             }
                         }
                     } else if (desFile.isFile()) {
                         if (forceWrite) {
                             boolean result = srcFile.renameTo(desFile);
-                            send("Moved!");
+                            send("Moved!", true, true);
                         } else {
-                            send("Cannot move '" + des + "': File exists");
+                            send("Cannot move '" + des + "': File exists", true, true);
                         }
                     } else {
                         String[] fs = des.split("/");
@@ -512,17 +568,27 @@ public class ServiceThread extends Thread {
                         if (f.exists()) {
                             boolean result = srcFile.renameTo(desFile);
                             if (result) {
-                                send("Moved!");
+                                send("Moved!", true, true);
                             } else {
-                                send("Cannot move: Something failed!");
+                                send("Cannot move: Something failed!", true, true);
                             }
                         } else {
-                            send("Cannot copy '" + parentFolder + "': No such file or directory");
+                            send("Cannot copy '" + parentFolder + "': No such file or directory", true, true);
                         }
                     }
                 } else {
-                    send("Cannot move '" + src + "': No such file or directory");
+                    send("Cannot move '" + src + "': No such file or directory", true, true);
                 }
+            }
+        }
+    }
+
+    private void copyDir(File file, String filePath, File des) throws IOException {
+        Files.copy(file.toPath(), des.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        File[] files = file.listFiles();
+        if (files != null) {
+            for (File f : files) {
+                copyDir(f, filePath + "/" + f.getName(), new File(des.toPath().toString() + "/" + f.getName()));
             }
         }
     }
@@ -531,48 +597,61 @@ public class ServiceThread extends Thread {
         String src = cmd.getParameter(1);
         String des = cmd.getParameter(2);
         boolean forceWrite = false;
-
+        boolean cpDir = false;
+        if (cmd.getParameters().indexOf("-f") != -1 || cmd.getParameters().indexOf("--force") != -1) {
+            forceWrite = true;
+        }
+        if (cmd.getParameters().indexOf("-r") != -1 || cmd.getParameters().indexOf("--recursive") != -1) {
+            cpDir = true;
+        }
         src = validatePath(src);
         if (src != null) {
             des = validatePath(des);
             if (des != null) {
                 File srcFile = new File(src);
                 File desFile = new File(des);
-                if (srcFile.exists()) {
-                    if (desFile.isDirectory()) {
+                if (srcFile.isFile()) {
+                    if (desFile.isDirectory()) { // if destination if a folder
                         des += "/" + srcFile.getName();
                         desFile = new File(des);
                         if (desFile.isFile()) {
                             if (forceWrite) {
                                 Files.copy(srcFile.toPath(), desFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                                send("Copied!");
+                                send("Copied!", true, true);
                             } else {
-                                send("Cannot copy '" + des + "': File exists");
+                                send("Cannot copy '" + des + "': File exists", true, true);
                             }
                         } else {
                             Files.copy(srcFile.toPath(), desFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                            send("Copied!");
+                            send("Copied!", true, true);
                         }
-                    } else if (desFile.isFile()) {
+                    } else if (desFile.isFile()) { // if it a file then check overwrite
                         if (forceWrite) {
                             Files.copy(srcFile.toPath(), desFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                            send("Copied!");
+                            send("Copied!", true, true);
                         } else {
-                            send("Cannot copy '" + des + "': File exists");
+                            send("Cannot copy '" + des + "': File exists", true, true);
                         }
-                    } else { // not exists
+                    } else { // if destination is not exists
                         String[] fs = des.split("/");
                         String parentFolder = String.join("/", Arrays.copyOf(fs, fs.length - 1));
                         File f = new File(parentFolder);
                         if (f.exists()) {
                             Files.copy(srcFile.toPath(), desFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                            send("Copied!");
+                            send("Copied!", true, true);
                         } else {
-                            send("Cannot copy '" + parentFolder + "': No such file or directory");
+                            send("Cannot copy '" + parentFolder + "': No such file or directory", true, true);
                         }
                     }
+                } else if (srcFile.isDirectory()) {
+                    if (cpDir) {
+                        copyDir(srcFile, src, desFile);
+                        send("Copied!", true, true);
+                    } else {
+                        send("Cannot copy: add -r option to copy folder!", true, true);
+                    }
                 } else {
-                    send("Cannot copy '" + src + "': No such file or directory");
+                    send("Cannot copy '" + src + "': No such file or directory", true, true);
                 }
             }
         }

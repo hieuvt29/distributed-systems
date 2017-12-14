@@ -39,7 +39,7 @@ public class TerminalUI extends javax.swing.JFrame {
 
     }
 
-    private void initCore() {
+    private void initCore() throws IOException {
         try {
             this.client = new DSClient("localhost", 9999);
         } catch (IOException ex) {
@@ -47,6 +47,7 @@ public class TerminalUI extends javax.swing.JFrame {
             System.out.println("Server not found!");
             jTextAreaConsole.append("Server not found!");
             jTextAreaConsole.append("Exiting...");
+            this.client.disconnect(true);
         }
     }
 
@@ -190,6 +191,7 @@ public class TerminalUI extends javax.swing.JFrame {
                 try {
                     TerminalUI frame = new TerminalUI();
                     frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+                    frame.setLocationRelativeTo(null); 
                     frame.setVisible(true);
 
                     frame.firstWords();
@@ -219,37 +221,37 @@ public class TerminalUI extends javax.swing.JFrame {
         }
     }
 
-    void core() throws IOException {
-        while (true) {
-            // Đọc dữ liệu trả lời từ phía server
-            // Bằng cách đọc luồng đầu vào của Socket tại Client.
-            String responseLine;
-            responseLine = client.receive();
-
-            if (responseLine.contains("username") || responseLine.contains("password")) {
-                jTextAreaConsole.append(responseLine);
-                System.out.print(responseLine);
-            } else {
-                jTextAreaConsole.append(responseLine);
-                System.out.print(responseLine);
-                System.out.println("$ ");
-                jTextAreaConsole.append("$ ");
-            }
-
-            Scanner sc = new Scanner(System.in);
-            String usercmd = sc.nextLine();
-            if (responseLine.contains("exit")) {
-                client.disconnect(false);
-                return;
-            }
-            client.send(usercmd);
-
-            if (usercmd.contains("exit")) {
-                break;
-            }
-        }
-        client.disconnect(true);
-    }
+//    void core() throws IOException {
+//        while (true) {
+//            // Đọc dữ liệu trả lời từ phía server
+//            // Bằng cách đọc luồng đầu vào của Socket tại Client.
+//            String responseLine;
+//            responseLine = client.receive();
+//
+//            if (responseLine.contains("username") || responseLine.contains("password")) {
+//                jTextAreaConsole.append(responseLine);
+//                System.out.print(responseLine);
+//            } else {
+//                jTextAreaConsole.append(responseLine);
+//                System.out.print(responseLine);
+//                System.out.println("$ ");
+//                jTextAreaConsole.append("$ ");
+//            }
+//
+//            Scanner sc = new Scanner(System.in);
+//            String usercmd = sc.nextLine();
+//            if (responseLine.contains("exit")) {
+//                client.disconnect(false);
+//                return;
+//            }
+//            client.send(usercmd);
+//
+//            if (usercmd.contains("exit")) {
+//                break;
+//            }
+//        }
+//        client.disconnect(true);
+//    }
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JScrollPane jScrollPane1;
     private javax.swing.JTextArea jTextAreaConsole;

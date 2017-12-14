@@ -3,6 +3,9 @@ package ds.server;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
@@ -22,20 +25,44 @@ public class DSServer {
     public static InetAddress hostAddress = null;
     public static String rootPath = "root";
     
-    private static void init() {
+    private static void init() throws FileNotFoundException, IOException {
         // load users
-        User u = new User("hieuvt", "123321");
-        users.add(u);
+        BufferedReader br = new BufferedReader(new FileReader("src/users.dat"));
+        try {
+            String line = br.readLine();
+            while (line != null) {
+                String username = line.split(":")[0];
+                String password = line.split(":")[1];
+                User u = new User(username, password);
+                users.add(u);
+                line = br.readLine();
+            }
+        } finally {
+            br.close();
+        }
         
         // create root directory
         new File(rootPath).mkdir();
     }
-    
+    public static void saveUsers() throws IOException {
+        BufferedWriter wr = new BufferedWriter(new FileWriter("src/users.dat"));
+        for (User u: users) {
+            wr.write(u.getUsername() + ":" + u.getPassword() + "\n");
+        }
+        wr.close();
+    }
     public static boolean checkUser(String username, String password) {
         System.out.println("Checking user");
         return users.stream().anyMatch((user) -> (user.getUsername().equals(username) && user.getPassword().equals(password)));
     }
-    
+    public static int checkUsername(String username) {
+        for(User u: users) {
+            if (u.getUsername().equals(username)){
+                return users.indexOf(u);
+            }
+        }
+        return -1;
+    }
     public static User getUser(String username) { 
         for(User u: users) {
             if (u.getUsername().equals(username)){
@@ -94,6 +121,7 @@ public class DSServer {
             e.printStackTrace();
         } finally {
             listener.close();
+            saveUsers();
             System.out.println("Sever stopped!");
             System.exit(1);
         }
